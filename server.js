@@ -25,6 +25,13 @@ const mime = {
 const server = http.createServer((req, res) => {
   try {
     const urlPath = decodeURIComponent(new URL(req.url, `http://${req.headers.host}`).pathname);
+
+    // Liveness probe
+    if (urlPath === '/health' || urlPath === '/healthz') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'ok' }));
+      return;
+    }
     let filePath = path.join(root, urlPath === '/' ? '/index.html' : urlPath);
 
     // Prevent path traversal

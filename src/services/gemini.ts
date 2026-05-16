@@ -43,10 +43,13 @@ export const generateBirthdayLetter = async (name: string, senderName: string, z
   try {
     const prompt = rewriteMessage
       ? `Write a heartfelt, emotionally resonant birthday letter to ${name}${nickname ? ` (please address them as ${nickname})` : ''}. They are a ${zodiac}. ${relationship ? `The sender's relationship to them is: ${relationship}.` : ''} Take the core sentiment of this message and rewrite it emotionally: "${personalMessage}". Tone: deeply personal, cinematic, warm. Under 200 words. End with exactly:\nWith love,\n${senderName}`
-      : `Write a heartfelt birthday letter to ${name}${nickname ? ` (please address them as ${nickname})` : ''}. They are a ${zodiac}. ${relationship ? `Relationship: ${relationship}.` : ''} Tone: deeply personal, cinematic, warm. Under 150 words. End with exactly:\nWith love,\n${senderName}`;
+      : `Write a heartfelt birthday letter to ${name}${nickname ? ` (please address them as ${nickname})` : ''}. They are a ${zodiac}. ${relationship ? `Relationship: ${relationship}.` : ''} Tone: deeply personal, cinematic, warm. Under 150 words. Do not include a closing signature.`;
     
     let text = await callAI(prompt);
-    if (!rewriteMessage) text += `\n\n${personalMessage}`;
+    if (!rewriteMessage) {
+      text = text.replace(/\n?\n?With love,\s*[\s\S]*$/i, '').trim();
+      text = `${text}\n\n${personalMessage}\n\nWith love,\n${senderName}`;
+    }
     return text;
   } catch (error) {
     console.error("AI Error:", error);

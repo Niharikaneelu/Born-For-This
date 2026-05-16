@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { Upload, X } from 'lucide-react';
 import { StarField } from '../shared/StarField';
+import { fileToDataUrl, validateImageFile } from '../../utils/imageProcessing';
 
 export const GiftModeForm: React.FC = () => {
   const [name, setName] = useState('');
@@ -11,13 +13,115 @@ export const GiftModeForm: React.FC = () => {
   const [message, setMessage] = useState('');
   const [relationship, setRelationship] = useState('');
   const [rewriteMessage, setRewriteMessage] = useState(true);
+  const [photoData, setPhotoData] = useState<string | null>(null);
+  const [voiceData, setVoiceData] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<BlobPart[]>([]);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [isLoadingPhoto, setIsLoadingPhoto] = useState(false);
   const navigate = useNavigate();
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsLoadingPhoto(true);
+    setPhotoError(null);
+
+    try {
+      // Validate file
+      const validation = validateImageFile(file, 5);
+      if (!validation.valid) {
+        setPhotoError(validation.error || 'Invalid image file');
+        setIsLoadingPhoto(false);
+        return;
+      }
+
+      // Convert to data URL
+      const dataUrl = await fileToDataUrl(file);
+      setPhotoData(dataUrl);
+    } catch (error) {
+      setPhotoError('Failed to load image. Please try another file.');
+      console.error('Photo upload error:', error);
+    } finally {
+      setIsLoadingPhoto(false);
+    }
+  };
+
+  const handleRemovePhoto = () => {
+    setPhotoData(null);
+    setPhotoError(null);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (name && senderName && date && message) {
-      navigate('/gift/result', { state: { name, senderName, nickname, date, message, relationship, rewriteMessage } });
+      navigate('/gift/result', { state: { name, senderName, nickname, date, message, relationship, rewriteMessage, photoData, voiceData } });
     }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordedChunksRef.current = [];
+      const mr = new MediaRecorder(stream);
+      mediaRecorderRef.current = mr;
+
+      mr.ondataavailable = (ev) => {
+        if (ev.data && ev.data.size > 0) {
+          recordedChunksRef.current.push(ev.data);
+        }
+      };
+
+      mr.onstop = async () => {
+        const blob = new Blob(recordedChunksRef.current, { type: 'audio/webm' });
+        const file = new File([blob], 'voice.webm', { type: blob.type });
+        try {
+          const dataUrl = await fileToDataUrl(file);
+          setVoiceData(dataUrl);
+        } catch (err) {
+          console.error('Failed to encode recorded audio', err);
+        }
+        // stop tracks
+        stream.getTracks().forEach((t) => t.stop());
+      };
+
+      mr.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error('Recording failed or permission denied', err);
+    }
+  };
+
+  const stopRecording = () => {
+    setIsRecording(false);
+    try {
+      mediaRecorderRef.current?.stop();
+      mediaRecorderRef.current = null;
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  const handleVoiceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      // optional: limit to 5MB
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Voice note must be smaller than 5MB');
+        return;
+      }
+      const dataUrl = await fileToDataUrl(file);
+      setVoiceData(dataUrl);
+    } catch (err) {
+      console.error('Failed to load audio', err);
+    }
+  };
+
+  const removeVoice = () => {
+    setVoiceData(null);
   };
 
   return (
@@ -98,6 +202,97 @@ export const GiftModeForm: React.FC = () => {
             >
               Their Nickname (Optional)
             </label>
+          </div>
+
+          {/* Photo Upload Section */}
+          <div className="space-y-3 pt-4">
+            <label htmlFor="photo" className="text-cosmic-muted font-body text-sm transition-all tracking-wide uppercase">
+              Add a Memory Photo (Optional)
+            </label>
+            
+            {!photoData ? (
+              <div className="relative">
+                <input
+                  type="file"
+                  id="photo"
+                  accept="image/jpeg,image/jpg,image/png"
+                  onChange={handlePhotoUpload}
+                  disabled={isLoadingPhoto}
+                  className="hidden"
+                />
+                <label 
+                  htmlFor="photo"
+                  className="block w-full px-4 py-4 rounded-xl border-2 border-dashed border-cosmic-muted/30 hover:border-cosmic-glow/50 transition-colors cursor-pointer text-center"
+                >
+                  <Upload className="w-6 h-6 mx-auto mb-2 text-cosmic-muted" />
+                  <p className="text-cosmic-muted text-sm">
+                    {isLoadingPhoto ? 'Processing...' : 'Click to upload JPG or PNG'}
+                  </p>
+                  <p className="text-cosmic-muted/50 text-xs mt-1">Max 5MB</p>
+                </label>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="relative rounded-xl overflow-hidden border border-cosmic-glow/50 shadow-lg shadow-cosmic-accent-1/20">
+                  <img
+                    src={photoData}
+                    alt="Memory photo preview"
+                    className="w-full h-40 object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRemovePhoto}
+                    className="absolute top-2 right-2 p-2 rounded-lg bg-black/60 hover:bg-black/80 transition-colors"
+                    title="Remove photo"
+                  >
+                    <X className="w-4 h-4 text-cosmic-glow" />
+                  </button>
+                </div>
+                <p className="text-cosmic-muted text-sm">Photo ready to be used in the puzzle experience.</p>
+              </div>
+            )}
+
+            {photoError && (
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-cosmic-accent-2 text-sm bg-cosmic-accent-2/10 p-3 rounded-lg"
+              >
+                {photoError}
+              </motion.p>
+            )}
+          </div>
+
+          {/* Voice Note Section */}
+          <div className="space-y-3 pt-4">
+            <label className="text-cosmic-muted font-body text-sm transition-all tracking-wide uppercase">
+              Add a Voice Note (Optional)
+            </label>
+
+            {!voiceData ? (
+              <div className="flex flex-col md:flex-row gap-3 items-center">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => (isRecording ? stopRecording() : startRecording())}
+                    className={`px-4 py-2 rounded-lg font-medium ${isRecording ? 'bg-red-600 text-white' : 'bg-white/5 text-cosmic-glow'}`}
+                  >
+                    {isRecording ? 'Stop' : 'Record'}
+                  </button>
+
+                  <label className="block">
+                    <input type="file" accept="audio/*" onChange={handleVoiceUpload} className="hidden" />
+                    <span className="px-4 py-2 rounded-lg bg-white/5 text-cosmic-glow cursor-pointer">Upload</span>
+                  </label>
+                </div>
+                <p className="text-cosmic-muted text-sm">Max 5MB · Optional short message</p>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <audio controls src={voiceData} className="w-64" />
+                <button type="button" onClick={removeVoice} className="px-3 py-2 rounded bg-white/5">Remove</button>
+              </div>
+            )}
           </div>
 
           <div className="relative">

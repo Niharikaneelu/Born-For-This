@@ -1,5 +1,29 @@
 # React + TypeScript + Vite
 
+## Born For This Commands
+
+```bash
+npm run dev
+npm run build
+npm run preview
+```
+
+## End-to-End Testing (Playwright)
+
+```bash
+npm run test:e2e
+```
+
+Use UI mode when developing tests:
+
+```bash
+npm run test:e2e:ui
+```
+
+Current smoke coverage (`tests/e2e/gift-mode.smoke.spec.ts`):
+- Gift form renders optional photo and voice-note controls.
+- Gift form submit navigates to `/gift/result`.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

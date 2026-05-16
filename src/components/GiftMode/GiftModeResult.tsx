@@ -1,12 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { motion, type Variants } from 'framer-motion';
 import { StarField } from '../shared/StarField';
 import { TypingText } from '../shared/TypingText';
 import { InteractiveStars } from '../shared/InteractiveStars';
 import { CandleAnimation } from '../shared/CandleAnimation';
+import { PuzzleReveal } from '../shared/PuzzleReveal';
 import { useAI } from '../../hooks/useAI';
 import { getBirthData } from '../../utils/birthData';
+import { processImageForPuzzle, type PuzzleImage } from '../../utils/imageProcessing';
 import { Copy, Music, Music2 } from 'lucide-react';
 
 interface GiftData {
@@ -17,6 +19,9 @@ interface GiftData {
   identity: string;
   letter: string;
   stars: string[];
+  photoData?: string;
+  voiceData?: string;
+  puzzleImage?: PuzzleImage;
 }
 
 export const GiftModeResult: React.FC = () => {
@@ -26,29 +31,66 @@ export const GiftModeResult: React.FC = () => {
   
   const { fetchGiftModeData, isLoading } = useAI();
   const [giftData, setGiftData] = useState<GiftData | null>(null);
-  const [musicPlaying, setMusicPlaying] = useState(false);
+  const [puzzleProcessing, setPuzzleProcessing] = useState(false);
+  const [musicPlaying, setMusicPlaying] = useState(true);
   const [copied, setCopied] = useState(false);
   const [letterVisible, setLetterVisible] = useState(false);
 
+  const buildPuzzleImage = async (photoData: string): Promise<PuzzleImage | undefined> => {
+    try {
+      const response = await fetch(photoData);
+      const blob = await response.blob();
+      const file = new File([blob], 'memory.jpg', { type: 'image/jpeg' });
+      return await processImageForPuzzle(file);
+    } catch (error) {
+      console.error('Failed to process puzzle image:', error);
+      return undefined;
+    }
+  };
+
   useEffect(() => {
-    const loadFromHash = () => {
+    const loadFromHash = async () => {
       try {
-        const decoded = JSON.parse(atob(encodedId!));
+        const decoded = JSON.parse(atob(encodedId!)) as GiftData;
+
+        if (decoded.photoData && !decoded.puzzleImage) {
+          setPuzzleProcessing(true);
+          const puzzleImage = await buildPuzzleImage(decoded.photoData);
+          if (puzzleImage) {
+            decoded.puzzleImage = puzzleImage;
+          }
+          setPuzzleProcessing(false);
+        }
+
         setGiftData(decoded);
       } catch (e) {
+        setPuzzleProcessing(false);
         navigate('/');
       }
     };
 
     const generateNew = async () => {
-      const { name, senderName, nickname, date, message, relationship, rewriteMessage = true } = location.state || {};
+      const { name, senderName, nickname, date, message, relationship, rewriteMessage = true, photoData, voiceData } = location.state || {};
       if (!name || !senderName || !date || !message) {
         navigate('/');
         return;
       }
+      
       const data = await fetchGiftModeData(name, senderName, date, message, relationship, nickname, rewriteMessage);
       if (data) {
-        setGiftData({ name, senderName, nickname, date, ...data });
+        const newGiftData: GiftData = { name, senderName, nickname, date, ...data, photoData, voiceData };
+        
+        // Process photo into puzzle if provided
+        if (photoData) {
+          setPuzzleProcessing(true);
+          const puzzleImage = await buildPuzzleImage(photoData);
+          if (puzzleImage) {
+            newGiftData.puzzleImage = puzzleImage;
+          }
+          setPuzzleProcessing(false);
+        }
+        
+        setGiftData(newGiftData);
       }
     };
 
@@ -69,7 +111,47 @@ export const GiftModeResult: React.FC = () => {
     setTimeout(() => setCopied(false), 3000);
   };
 
-  if (isLoading || !giftData) {
+  // Background music playback using optional `public/bg music.mp3`.
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const audioPath = '/bg music.mp3';
+    const audioUrl = encodeURI(audioPath);
+
+    const startAudio = async () => {
+      try {
+        if (!audioRef.current) {
+          audioRef.current = new Audio(audioUrl);
+          audioRef.current.loop = true;
+          audioRef.current.volume = 0.6;
+        }
+        await audioRef.current.play();
+      } catch (e) {
+        // Play may be blocked by browser autoplay policies; this is non-fatal.
+        console.warn('Audio playback failed or blocked', e);
+      }
+    };
+
+    const stopAudio = () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+    };
+
+    if (musicPlaying) {
+      startAudio();
+    } else {
+      stopAudio();
+    }
+
+    return () => {
+      stopAudio();
+      audioRef.current = null;
+    };
+  }, [musicPlaying]);
+
+  if (isLoading || puzzleProcessing || !giftData) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center relative bg-cosmic-bg px-4 text-center">
         <StarField speed={2} starCount={300} />
@@ -78,10 +160,10 @@ export const GiftModeResult: React.FC = () => {
           transition={{ duration: 2, repeat: Infinity }}
           className="text-cosmic-glow font-heading text-3xl italic tracking-wider mb-4"
         >
-          Reading the stars...
+          {puzzleProcessing ? 'Preparing memories...' : 'Reading the stars...'}
         </motion.p>
         <p className="text-cosmic-muted font-light text-sm tracking-widest uppercase">
-          Crafting your unique universe
+          {puzzleProcessing ? 'Crafting your puzzle' : 'Crafting your unique universe'}
         </p>
       </div>
     );
@@ -107,13 +189,16 @@ export const GiftModeResult: React.FC = () => {
       {/* Music Toggle */}
       <button 
         onClick={() => setMusicPlaying(!musicPlaying)}
-        className="fixed top-8 right-8 z-50 p-3 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors backdrop-blur-sm group"
+        className="fixed top-8 right-8 z-50 flex flex-col items-center gap-2 p-3 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors backdrop-blur-sm group"
         title="Toggle Music"
       >
         {musicPlaying ? 
           <Music className="w-5 h-5 text-cosmic-glow" /> : 
           <Music2 className="w-5 h-5 text-cosmic-muted group-hover:text-cosmic-glow" />
         }
+        <span className="text-[10px] uppercase tracking-[0.2em] text-cosmic-muted">
+          {musicPlaying ? 'Turn off' : 'Turn on'}
+        </span>
       </button>
 
       {/* Section 1: Arrival */}
@@ -215,7 +300,19 @@ export const GiftModeResult: React.FC = () => {
         </div>
       </section>
 
-      {/* Section 6: Birthday Moment */}
+      {/* Section 6: Puzzle Reveal (Optional) */}
+      {giftData.puzzleImage && (
+        <PuzzleReveal
+          pieces={giftData.puzzleImage.pieces}
+          pieceWidth={giftData.puzzleImage.pieceWidth}
+          pieceHeight={giftData.puzzleImage.pieceHeight}
+          fullImageUrl={giftData.puzzleImage.originalDataUrl}
+          voiceUrl={giftData.voiceData}
+          recipientName={giftData.name}
+        />
+      )}
+
+      {/* Section 7: Birthday Moment */}
       <section className="min-h-screen flex flex-col items-center justify-center px-4 snap-start">
         <motion.div 
           variants={sectionVariants}
@@ -231,7 +328,7 @@ export const GiftModeResult: React.FC = () => {
         <CandleAnimation name={giftData.name} />
       </section>
 
-      {/* Section 7: Share (Only show if not already shared) */}
+      {/* Section 8: Share (Only show if not already shared) */}
       {!encodedId && (
         <section className="min-h-[50vh] flex flex-col items-center justify-center px-4 pb-20 snap-start border-t border-white/5">
           <motion.div 

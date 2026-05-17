@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@theme {
+  --color-cosmic-bg: #04020f;
+  --color-cosmic-accent-1: #7c3aed;
+  --color-cosmic-accent-2: #2563eb;
+  --color-cosmic-glow: #c4b5fd;
+  --color-cosmic-text: #f5f3ff;
+  --color-cosmic-muted: #8b7fb4;
+
+  --font-heading: 'Cormorant Garamond', serif;
+  --font-body: 'Inter', sans-serif;
+
+  --animate-twinkle: twinkle 3s ease-in-out infinite;
+  --animate-glow-pulse: glow-pulse 2s ease-in-out infinite;
+  --animate-float: float 6s ease-in-out infinite;
+
+  @keyframes twinkle {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  @keyframes glow-pulse {
+    0%, 100% { filter: drop-shadow(0 0 8px var(--color-cosmic-glow)); }
+    50% { filter: drop-shadow(0 0 2px var(--color-cosmic-glow)); }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+}
+
+/* Base layer overrides */
+@layer base {
+  body {
+    @apply bg-cosmic-bg text-cosmic-text font-body antialiased;
+    margin: 0;
+    overflow-x: hidden;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading tracking-wide;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-cosmic-accent-1/30 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-cosmic-accent-1/50;
+  }
+}
+
+@layer utilities {
+  .text-glow {
+    text-shadow: 0 0 10px rgba(196, 181, 253, 0.5);
+  }
+  .box-glow {
+    box-shadow: 0 0 15px rgba(124, 58, 237, 0.3);
+  }
+}

@@ -24,6 +24,85 @@ interface GiftData {
   puzzleImage?: PuzzleImage;
 }
 
+type ShareableGiftData = GiftData;
+
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+
+const encodeBase64Url = (bytes: Uint8Array) => {
+  let binary = '';
+
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+};
+
+const decodeBase64Url = (encoded: string) => {
+  const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+  const binary = atob(padded);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+};
+
+const compressText = async (text: string) => {
+  if (typeof CompressionStream === 'undefined') return null;
+
+  const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
+  const buffer = await new Response(stream).arrayBuffer();
+  return new Uint8Array(buffer);
+};
+
+const decompressText = async (bytes: Uint8Array) => {
+  if (typeof DecompressionStream === 'undefined') return null;
+
+  const arrayBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  const stream = new Response(arrayBuffer).body?.pipeThrough(new DecompressionStream('gzip'));
+  if (!stream) return null;
+
+  const buffer = await new Response(stream).arrayBuffer();
+  return textDecoder.decode(buffer);
+};
+
+const encodeGiftData = async (giftData: GiftData) => {
+  const json = JSON.stringify(giftData);
+  const compressed = await compressText(json);
+
+  if (compressed) {
+    return `g1.${encodeBase64Url(compressed)}`;
+  }
+
+  return `b1.${encodeBase64Url(textEncoder.encode(json))}`;
+};
+
+const decodeGiftData = async (encodedGiftData: string) => {
+  if (encodedGiftData.startsWith('g1.')) {
+    const compressedBytes = decodeBase64Url(encodedGiftData.slice(3));
+    const json = await decompressText(compressedBytes);
+
+    if (json) {
+      return JSON.parse(json) as GiftData;
+    }
+  }
+
+  if (encodedGiftData.startsWith('b1.')) {
+    const bytes = decodeBase64Url(encodedGiftData.slice(3));
+    return JSON.parse(textDecoder.decode(bytes)) as GiftData;
+  }
+
+  const compressedJson = await decompressText(decodeBase64Url(encodedGiftData));
+  if (compressedJson) {
+    return JSON.parse(compressedJson) as GiftData;
+  }
+
+  const bytes = decodeBase64Url(encodedGiftData);
+  return JSON.parse(textDecoder.decode(bytes)) as GiftData;
+};
+
 export const GiftModeResult: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -51,7 +130,7 @@ export const GiftModeResult: React.FC = () => {
   useEffect(() => {
     const loadFromHash = async () => {
       try {
-        const decoded = JSON.parse(atob(encodedId!)) as GiftData;
+        const decoded = await decodeGiftData(encodedId!);
 
         if (decoded.photoData && !decoded.puzzleImage) {
           setPuzzleProcessing(true);
@@ -104,15 +183,56 @@ export const GiftModeResult: React.FC = () => {
 
   const handleShare = () => {
     if (!giftData) return;
-    const encoded = btoa(JSON.stringify(giftData));
-    const shareUrl = `${window.location.origin}/share/${encoded}`;
-    navigator.clipboard.writeText(shareUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 3000);
+
+    const shareableGiftData: ShareableGiftData = {
+      name: giftData.name,
+      senderName: giftData.senderName,
+      nickname: giftData.nickname,
+      date: giftData.date,
+      identity: giftData.identity,
+      letter: giftData.letter,
+      stars: giftData.stars,
+      photoData: giftData.photoData,
+      voiceData: giftData.voiceData,
+      puzzleImage: giftData.puzzleImage,
+    };
+
+    void (async () => {
+      const encoded = await encodeGiftData(shareableGiftData);
+      const shareUrl = `${window.location.origin}/share/${encoded}`;
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
+    })();
   };
 
   // Background music playback using optional `public/bg music.mp3`.
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const baseMusicVolumeRef = useRef(0.6);
+  const fadeIntervalRef = useRef<number | null>(null);
+
+  const fadeOutAudio = (audio: HTMLAudioElement, duration = 600) => {
+    if (fadeIntervalRef.current !== null) {
+      window.clearInterval(fadeIntervalRef.current);
+      fadeIntervalRef.current = null;
+    }
+
+    const step = 50;
+    const volumeStep = audio.volume / (duration / step);
+
+    fadeIntervalRef.current = window.setInterval(() => {
+      if (audio.volume - volumeStep > 0) {
+        audio.volume -= volumeStep;
+      } else {
+        audio.volume = 0;
+        audio.pause();
+        if (fadeIntervalRef.current !== null) {
+          window.clearInterval(fadeIntervalRef.current);
+          fadeIntervalRef.current = null;
+        }
+      }
+    }, step);
+  };
 
   useEffect(() => {
     const audioPath = '/bg music.mp3';
@@ -123,7 +243,7 @@ export const GiftModeResult: React.FC = () => {
         if (!audioRef.current) {
           audioRef.current = new Audio(audioUrl);
           audioRef.current.loop = true;
-          audioRef.current.volume = 0.6;
+          audioRef.current.volume = baseMusicVolumeRef.current;
         }
         await audioRef.current.play();
       } catch (e) {
@@ -146,10 +266,30 @@ export const GiftModeResult: React.FC = () => {
     }
 
     return () => {
+      if (fadeIntervalRef.current !== null) {
+        window.clearInterval(fadeIntervalRef.current);
+        fadeIntervalRef.current = null;
+      }
       stopAudio();
       audioRef.current = null;
     };
   }, [musicPlaying]);
+
+  const handleCandleBlowStart = () => {
+    if (audioRef.current) {
+      fadeOutAudio(audioRef.current);
+    }
+  };
+
+  const handleCandleBlowEnd = async () => {
+    if (!musicPlaying || !audioRef.current) return;
+
+    try {
+      await audioRef.current.play();
+    } catch (e) {
+      console.warn('Audio resume failed or blocked', e);
+    }
+  };
 
   if (isLoading || puzzleProcessing || !giftData) {
     return (
@@ -325,7 +465,11 @@ export const GiftModeResult: React.FC = () => {
           <p className="text-cosmic-muted text-lg">Close your eyes. Make a wish.</p>
         </motion.div>
 
-        <CandleAnimation name={giftData.name} />
+        <CandleAnimation
+          name={giftData.name}
+          onBlowStart={handleCandleBlowStart}
+          onBlowEnd={handleCandleBlowEnd}
+        />
       </section>
 
       {/* Section 8: Share (Only show if not already shared) */}

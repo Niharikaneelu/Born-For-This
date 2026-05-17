@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Music } from 'lucide-react';
 import { PuzzleGame } from './PuzzleGame';
+import { PolaroidCard } from './PolaroidCard';
 
 interface PuzzleRevealProps {
   pieces: string[]; // 9 piece data URLs
@@ -217,13 +218,11 @@ export const PuzzleReveal: React.FC<PuzzleRevealProps> = ({
                     repeat: Infinity,
                   }}
                 >
-                  <motion.img
+                  <PolaroidCard
                     src={fullImageUrl}
                     alt="Memory photo"
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.8 }}
-                    className="w-full rounded-2xl border-2 border-cosmic-glow/50 shadow-2xl"
+                    caption={recipientName ? `A memory for ${recipientName}` : 'A memory'}
+                    imageClassName="h-[28rem]"
                   />
                 </motion.div>
 

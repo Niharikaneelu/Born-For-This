@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Upload, X } from 'lucide-react';
 import { StarField } from '../shared/StarField';
+import { PolaroidCard } from '../shared/PolaroidCard';
 import { fileToDataUrl, validateImageFile } from '../../utils/imageProcessing';
 
 export const GiftModeForm: React.FC = () => {
@@ -20,7 +21,11 @@ export const GiftModeForm: React.FC = () => {
   const recordedChunksRef = useRef<BlobPart[]>([]);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [isLoadingPhoto, setIsLoadingPhoto] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  const canSubmit = Boolean(name.trim() && senderName.trim() && date && message.trim());
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -54,11 +59,35 @@ export const GiftModeForm: React.FC = () => {
     setPhotoError(null);
   };
 
+  const submitForm = () => {
+    if (isSubmitting) return;
+
+    if (!canSubmit) {
+      setSubmitError('Please fill in Their Name, Your Name, Birth Date, and Personal Message.');
+      return;
+    }
+
+    setSubmitError(null);
+    setIsSubmitting(true);
+
+    navigate('/gift/result', {
+      state: {
+        name: name.trim(),
+        senderName: senderName.trim(),
+        nickname: nickname.trim(),
+        date,
+        message: message.trim(),
+        relationship: relationship.trim(),
+        rewriteMessage,
+        photoData,
+        voiceData,
+      },
+    });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (name && senderName && date && message) {
-      navigate('/gift/result', { state: { name, senderName, nickname, date, message, relationship, rewriteMessage, photoData, voiceData } });
-    }
+    submitForm();
   };
 
   const startRecording = async () => {
@@ -150,7 +179,7 @@ export const GiftModeForm: React.FC = () => {
           Craft a deeply personal cosmic experience for someone special.
         </p>
 
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <form onSubmit={handleSubmit} className="space-y-8" noValidate>
           <div className="relative">
             <input
               type="text"
@@ -233,16 +262,17 @@ export const GiftModeForm: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="relative rounded-xl overflow-hidden border border-cosmic-glow/50 shadow-lg shadow-cosmic-accent-1/20">
-                  <img
+                <div className="relative">
+                  <PolaroidCard
                     src={photoData}
                     alt="Memory photo preview"
-                    className="w-full h-40 object-cover"
+                    caption="Memory kept"
+                    imageClassName="h-56"
                   />
                   <button
                     type="button"
                     onClick={handleRemovePhoto}
-                    className="absolute top-2 right-2 p-2 rounded-lg bg-black/60 hover:bg-black/80 transition-colors"
+                    className="absolute top-3 right-3 p-2 rounded-lg bg-black/60 hover:bg-black/80 transition-colors"
                     title="Remove photo"
                   >
                     <X className="w-4 h-4 text-cosmic-glow" />
@@ -363,12 +393,16 @@ export const GiftModeForm: React.FC = () => {
 
           <div className="pt-6 text-center">
             <button
-              type="submit"
-              disabled={!name || !senderName || !date || !message}
-              className="w-full py-4 rounded-xl bg-cosmic-text text-cosmic-bg font-heading text-xl tracking-widest hover:bg-cosmic-glow transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(245,243,255,0.1)] hover:shadow-[0_0_30px_rgba(196,181,253,0.3)]"
+              type="button"
+              onClick={submitForm}
+              disabled={!canSubmit || isSubmitting}
+              className="relative z-10 w-full py-4 rounded-xl bg-cosmic-text text-cosmic-bg font-heading text-xl tracking-widest hover:bg-cosmic-glow transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(245,243,255,0.1)] hover:shadow-[0_0_30px_rgba(196,181,253,0.3)]"
             >
-              Generate Universe
+              {isSubmitting ? 'Generating...' : 'Generate Universe'}
             </button>
+            {submitError && (
+              <p className="mt-3 text-sm text-cosmic-accent-2">{submitError}</p>
+            )}
           </div>
         </form>
       </motion.div>

@@ -3,12 +3,16 @@ const BASE_URL = "https://openrouter.ai/api/v1/chat/completions";
 const MODEL = "openai/gpt-3.5-turbo";
 
 const callAI = async (prompt: string): Promise<string> => {
+  if (!API_KEY) {
+    throw new Error("OpenRouter API key is not configured. Please set VITE_OPENROUTER_API_KEY environment variable.");
+  }
+
   const response = await fetch(BASE_URL, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${API_KEY}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": "http://localhost:5173",
+      "HTTP-Referer": typeof window !== 'undefined' ? window.location.origin : "https://born-for-this.vercel.app",
       "X-Title": "Born For This",
     },
     body: JSON.stringify({
@@ -17,7 +21,11 @@ const callAI = async (prompt: string): Promise<string> => {
     }),
   });
 
-  if (!response.ok) throw new Error(`API error: ${response.status}`);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    console.error("API Error Details:", errorData);
+    throw new Error(`API error: ${response.status} - ${errorData.error?.message || response.statusText}`);
+  }
   const data = await response.json();
   return data.choices[0].message.content.trim();
 };

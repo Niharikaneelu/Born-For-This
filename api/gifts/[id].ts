@@ -21,7 +21,6 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    // Fetch using Upstash REST API — no npm package needed
     const getRes = await fetch(
       `${REDIS_URL}/get/${encodeURIComponent('gift:' + id)}`,
       {
@@ -34,13 +33,13 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
-    const json = await getRes.json();
+    const json = await getRes.json() as { result: unknown };
+
     if (json.result === null || json.result === undefined) {
       res.status(404).json({ error: 'Not found' });
       return;
     }
 
-    // Upstash returns the value as stored; parse if it's a string
     const data = typeof json.result === 'string' ? JSON.parse(json.result) : json.result;
     res.status(200).json(data);
   } catch (e) {

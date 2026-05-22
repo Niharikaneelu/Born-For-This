@@ -1,4 +1,4 @@
-/// <reference types="node" />
+﻿/// <reference types="node" />
 
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -47,3 +47,4 @@ export default async function handler(req: any, res: any) {
     res.status(500).json({ error: 'Server error' });
   }
 }
+

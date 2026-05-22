@@ -116,10 +116,10 @@ export const PuzzleReveal: React.FC<PuzzleRevealProps> = ({
           className="text-center mb-16"
         >
           <h2 className="text-3xl md:text-4xl font-heading text-cosmic-glow text-glow mb-2">
-            Some memories are meant to be found slowly.
+            Some memories take time to find.
           </h2>
           <p className="text-cosmic-muted text-sm uppercase tracking-widest">
-            Piece this moment together
+            Put this moment together
           </p>
         </motion.div>
 
@@ -221,7 +221,7 @@ export const PuzzleReveal: React.FC<PuzzleRevealProps> = ({
                   <PolaroidCard
                     src={fullImageUrl}
                     alt="Memory photo"
-                    caption={recipientName ? `A memory for ${recipientName}` : 'A memory'}
+                    caption={recipientName ? `For ${recipientName}` : 'A memory'}
                     imageClassName="h-[28rem]"
                   />
                 </motion.div>
@@ -234,11 +234,11 @@ export const PuzzleReveal: React.FC<PuzzleRevealProps> = ({
                   className="text-center max-w-2xl mx-auto"
                 >
                   <p className="text-2xl md:text-3xl font-heading text-cosmic-glow leading-relaxed italic">
-                    Maybe this is why the universe let us meet.
+                    Maybe this is why we met.
                   </p>
                   {recipientName && (
                     <p className="text-cosmic-muted text-sm uppercase tracking-widest mt-6">
-                      — A memory for {recipientName}
+                      — For {recipientName}
                     </p>
                   )}
                 </motion.div>
@@ -259,7 +259,7 @@ export const PuzzleReveal: React.FC<PuzzleRevealProps> = ({
                       title="Voice note coming soon"
                     >
                       <Music className="w-5 h-5" />
-                      Play a message
+                      Play message
                     </button>
                   )}
                 </motion.div>
@@ -276,7 +276,7 @@ export const PuzzleReveal: React.FC<PuzzleRevealProps> = ({
             transition={{ delay: 1 }}
             className="text-center text-cosmic-muted text-sm uppercase tracking-widest mt-8"
           >
-            Drag pieces to the grid. A memory waiting to be found.
+            Drag the pieces to the grid. A memory is waiting.
           </motion.p>
         )}
       </div>

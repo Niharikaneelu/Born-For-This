@@ -130,6 +130,27 @@ export const GiftModeResult: React.FC = () => {
   useEffect(() => {
     const loadFromHash = async () => {
       try {
+        // If the path part looks like a short id (hex 16 chars from server), fetch stored gift
+        const shortIdMatch = /^[0-9a-f]{16}$/i.test(encodedId || '');
+        if (shortIdMatch) {
+          const res = await fetch(`/api/gifts/${encodedId}`);
+          if (!res.ok) {
+            navigate('/');
+            return;
+          }
+          const data = await res.json();
+
+          if (data.photoData && !data.puzzleImage) {
+            setPuzzleProcessing(true);
+            const puzzleImage = await buildPuzzleImage(data.photoData);
+            if (puzzleImage) data.puzzleImage = puzzleImage;
+            setPuzzleProcessing(false);
+          }
+
+          setGiftData(data as GiftData);
+          return;
+        }
+
         const decoded = await decodeGiftData(encodedId!);
 
         if (decoded.photoData && !decoded.puzzleImage) {
@@ -198,11 +219,35 @@ export const GiftModeResult: React.FC = () => {
     };
 
     void (async () => {
-      const encoded = await encodeGiftData(shareableGiftData);
-      const shareUrl = `${window.location.origin}/share/${encoded}`;
-      await navigator.clipboard.writeText(shareUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 3000);
+      try {
+        const res = await fetch('/api/gifts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(shareableGiftData),
+        });
+
+        if (res.ok) {
+          const { id } = await res.json();
+          const shareUrl = `${window.location.origin}/share/${id}`;
+          await navigator.clipboard.writeText(shareUrl);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 3000);
+          return;
+        }
+      } catch (e) {
+        console.warn('Share POST failed, falling back to encoded URL', e);
+      }
+
+      // Fallback: encode full payload in URL (legacy)
+      try {
+        const encoded = await encodeGiftData(shareableGiftData);
+        const shareUrl = `${window.location.origin}/share/${encoded}`;
+        await navigator.clipboard.writeText(shareUrl);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 3000);
+      } catch (e) {
+        console.error('Failed to create share link', e);
+      }
     })();
   };
 

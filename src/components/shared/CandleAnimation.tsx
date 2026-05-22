@@ -77,7 +77,7 @@ export const CandleAnimation: React.FC<CandleAnimationProps> = ({ name, onBlowSt
       const response = await Promise.race<string>([
         fetchWishResponse(name),
         new Promise((resolve) => {
-          window.setTimeout(() => resolve('Your wish is carried on the solar winds.'), 15000);
+          window.setTimeout(() => resolve('Your wish is on its way.'), 15000);
         }),
       ]);
 
@@ -199,7 +199,7 @@ export const CandleAnimation: React.FC<CandleAnimationProps> = ({ name, onBlowSt
             disabled={isWishing}
             className="relative z-50 mt-6 px-8 py-3 rounded-full border border-cosmic-glow text-cosmic-text font-heading text-xl tracking-widest hover:bg-cosmic-glow hover:text-cosmic-bg transition-all duration-300 shadow-[0_0_15px_rgba(196,181,253,0.3)] hover:shadow-[0_0_25px_rgba(196,181,253,0.6)] disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {isWishing ? 'Generating...' : 'Blow Candle & Make a Wish'}
+            {isWishing ? 'Creating...' : 'Blow the candle'}
           </motion.button>
         ) : (
           <motion.div
@@ -210,7 +210,7 @@ export const CandleAnimation: React.FC<CandleAnimationProps> = ({ name, onBlowSt
             className="text-center max-w-lg"
           >
             <p className="font-heading text-2xl text-cosmic-glow italic leading-relaxed">
-              {wishResponse || "Listening to the stars..."}
+              {wishResponse || 'Listening now...'}
             </p>
           </motion.div>
         )}

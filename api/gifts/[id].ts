@@ -1,39 +1,7 @@
 /// <reference types="node" />
 
-import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
-
-const SECRET = process.env.GIFT_SECRET || null;
-
-const storageDir = path.join(process.cwd(), 'data', 'gifts');
-if (!fs.existsSync(storageDir)) fs.mkdirSync(storageDir, { recursive: true });
-
-let kv: any = null;
-try { kv = await import('@vercel/kv'); kv = kv.default || kv; } catch (e) { kv = null; }
-
-const decrypt = (payload: string) => {
-  if (!SECRET) return JSON.parse(payload);
-  try {
-    const obj = JSON.parse(payload);
-    const key = crypto.createHash('sha256').update(String(SECRET)).digest();
-    const iv = Buffer.from(obj.iv, 'hex');
-    const tag = Buffer.from(obj.tag, 'hex');
-    const data = Buffer.from(obj.data, 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-    decipher.setAuthTag(tag);
-    const decrypted = Buffer.concat([decipher.update(data), decipher.final()]);
-    return JSON.parse(decrypted.toString('utf8'));
-  } catch (e) {
-    return null;
-  }
-};
-
-const readLocal = async (id: string) => {
-  const filePath = path.join(storageDir, `${id}.json`);
-  if (!fs.existsSync(filePath)) return null;
-  return fs.readFileSync(filePath, 'utf8');
-};
+const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
+const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') {
@@ -42,23 +10,38 @@ export default async function handler(req: any, res: any) {
   }
 
   const id = req.query?.id || req.url?.split('/').pop();
-  if (!id) {
-    res.status(400).json({ error: 'Missing id' });
+  if (!id || !/^[0-9a-f]{16}$/i.test(String(id))) {
+    res.status(400).json({ error: 'Invalid id' });
+    return;
+  }
+
+  if (!REDIS_URL || !REDIS_TOKEN) {
+    res.status(500).json({ error: 'Redis not configured.' });
     return;
   }
 
   try {
-    const raw = kv && typeof kv.get === 'function' ? await kv.get(String(id)) : await readLocal(String(id));
-    if (!raw) {
+    // Fetch using Upstash REST API — no npm package needed
+    const getRes = await fetch(
+      `${REDIS_URL}/get/${encodeURIComponent('gift:' + id)}`,
+      {
+        headers: { Authorization: `Bearer ${REDIS_TOKEN}` },
+      }
+    );
+
+    if (!getRes.ok) {
+      res.status(500).json({ error: 'Storage error' });
+      return;
+    }
+
+    const json = await getRes.json();
+    if (json.result === null || json.result === undefined) {
       res.status(404).json({ error: 'Not found' });
       return;
     }
-    const data = decrypt(String(raw));
-    if (!data) {
-      try { res.status(200).json(JSON.parse(String(raw))); return; } catch (e) {}
-      res.status(500).json({ error: 'Decrypt failed' });
-      return;
-    }
+
+    // Upstash returns the value as stored; parse if it's a string
+    const data = typeof json.result === 'string' ? JSON.parse(json.result) : json.result;
     res.status(200).json(data);
   } catch (e) {
     console.error('fetch error', e);

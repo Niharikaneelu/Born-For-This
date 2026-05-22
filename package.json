@@ -13,6 +13,7 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
+    "@vercel/kv": "^1.0.0",
     "@google/generative-ai": "^0.24.1",
     "express": "^5.2.1",
     "framer-motion": "^12.38.0",
